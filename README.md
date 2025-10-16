@@ -7,8 +7,8 @@ Convertisseur JPEG vers PDF avec extraction et superposition de métadonnées.
 - ✅ Interface simple et intuitive (Drag & Drop)
 - ✅ Extraction automatique des métadonnées EXIF (GPS, Date/Heure)
 - ✅ Superposition des métadonnées sur les images (bas à droite)
-  - **Ligne 1**: Coordonnées GPS (si disponibles)
-  - **Ligne 2**: Date et heure de prise de vue
+  - **Ligne 1**: Date et heure de prise de vue (grande taille - 48px)
+  - **Ligne 2**: Coordonnées GPS si disponibles (24px)
 - ✅ Génération de PDF multi-pages (1 image par page)
 - ✅ **Format Lettre US** (8.5" × 11")
 - ✅ **Orientation automatique** (portrait ou paysage selon l'image)
@@ -84,9 +84,9 @@ L'application parse les segments EXIF du fichier JPEG pour extraire:
 - Les métadonnées sont dessinées sur un Canvas
 - Positionnées en bas à droite de chaque image
 - Fond noir semi-transparent pour la lisibilité
-- Texte blanc en gras, taille 24px
-- **Ligne 1**: Coordonnées GPS (latitude, longitude)
-- **Ligne 2**: Date et heure de prise de vue
+- Texte blanc en gras
+- **Ligne 1**: Date et heure de prise de vue (48px - mise en évidence)
+- **Ligne 2**: Coordonnées GPS latitude, longitude (24px)
 
 ### Génération PDF
 

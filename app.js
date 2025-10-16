@@ -221,58 +221,66 @@ class JpegMeta2PDF {
                         // Dessiner l'image
                         ctx.drawImage(img, 0, 0);
                         
-                        // Ajouter les métadonnées en bas à droite
-                        if (Object.keys(exifData).length > 0) {
-                            const padding = 15;
-                            const lineHeight = 35;
-                            const fontSize = 24;
-                            
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                            ctx.font = `bold ${fontSize}px Arial`;
-                            
-                            // Organiser les métadonnées : GPS ligne 1, Date ligne 2
-                            const metaLines = [];
-                            
-                            // Ligne 1: Coordonnées GPS si disponibles
-                            if (exifData.GPS) {
-                                metaLines.push(exifData.GPS);
-                            }
-                            
-                            // Ligne 2: Date et heure
-                            if (exifData.Date) {
-                                metaLines.push(exifData.Date);
-                            }
-                            
-                            // Si on a des métadonnées à afficher
-                            if (metaLines.length > 0) {
-                                // Calculer la taille du rectangle de fond
-                                const maxWidth = Math.max(...metaLines.map(line => ctx.measureText(line).width));
-                                const rectHeight = metaLines.length * lineHeight + padding * 2;
-                                const rectWidth = maxWidth + padding * 2;
-                                
-                                // Dessiner le fond semi-transparent
-                                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-                                ctx.fillRect(
-                                    canvas.width - rectWidth - 15,
-                                    canvas.height - rectHeight - 15,
-                                    rectWidth,
-                                    rectHeight
-                                );
-                                
-                                // Dessiner le texte
-                                ctx.fillStyle = 'white';
-                                ctx.font = `bold ${fontSize}px Arial`;
-                                metaLines.forEach((line, index) => {
-                                    ctx.fillText(
-                                        line,
-                                        canvas.width - rectWidth - 15 + padding,
-                                        canvas.height - rectHeight - 15 + padding + (index + 1) * lineHeight
-                                    );
-                                });
-                            }
+                    // Ajouter les métadonnées en bas à droite
+                    if (Object.keys(exifData).length > 0) {
+                        const padding = 15;
+                        const dateLineHeight = 70;  // Ligne pour la date (plus grande)
+                        const gpsLineHeight = 35;   // Ligne pour GPS (plus petite)
+                        const dateFontSize = 48;    // Date 2x plus grosse
+                        const gpsFontSize = 24;     // GPS taille normale
+                        
+                        // Organiser les métadonnées : Date ligne 1 (en haut), GPS ligne 2
+                        const metaLines = [];
+                        
+                        // Ligne 1: Date et heure (en haut, plus grosse)
+                        if (exifData.Date) {
+                            metaLines.push({ text: exifData.Date, fontSize: dateFontSize, lineHeight: dateLineHeight });
                         }
                         
-                        // Convertir le canvas en blob JPEG
+                        // Ligne 2: Coordonnées GPS si disponibles
+                        if (exifData.GPS) {
+                            metaLines.push({ text: exifData.GPS, fontSize: gpsFontSize, lineHeight: gpsLineHeight });
+                        }
+                        
+                        // Si on a des métadonnées à afficher
+                        if (metaLines.length > 0) {
+                            // Calculer la largeur maximale en mesurant chaque ligne avec sa propre taille
+                            let maxWidth = 0;
+                            metaLines.forEach(line => {
+                                ctx.font = `bold ${line.fontSize}px Arial`;
+                                const lineWidth = ctx.measureText(line.text).width;
+                                if (lineWidth > maxWidth) {
+                                    maxWidth = lineWidth;
+                                }
+                            });
+                            
+                            // Calculer la hauteur totale
+                            const rectHeight = metaLines.reduce((sum, line) => sum + line.lineHeight, 0) + padding * 2;
+                            const rectWidth = maxWidth + padding * 2;
+                            
+                            // Dessiner le fond semi-transparent
+                            ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                            ctx.fillRect(
+                                canvas.width - rectWidth - 15,
+                                canvas.height - rectHeight - 15,
+                                rectWidth,
+                                rectHeight
+                            );
+                            
+                            // Dessiner le texte
+                            ctx.fillStyle = 'white';
+                            let currentY = canvas.height - rectHeight - 15 + padding;
+                            metaLines.forEach((line) => {
+                                ctx.font = `bold ${line.fontSize}px Arial`;
+                                currentY += line.lineHeight;
+                                ctx.fillText(
+                                    line.text,
+                                    canvas.width - rectWidth - 15 + padding,
+                                    currentY
+                                );
+                            });
+                        }
+                    }                        // Convertir le canvas en blob JPEG
                         canvas.toBlob((blob) => {
                             resolve({
                                 file: file,
