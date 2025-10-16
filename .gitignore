@@ -28,9 +28,13 @@ npm-debug.log*
 *.temp
 .env.local
 
+# Bibliothèques externes (peuvent être re-téléchargées)
+jspdf.min.js
+exif-js.min.js
+
 # Fichiers d'images de test (optionnel)
 test_images/
-test/*
+test/data/
 *.jpg
 *.jpeg
 *.JPG

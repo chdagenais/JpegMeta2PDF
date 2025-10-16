@@ -5,25 +5,29 @@ Convertisseur JPEG vers PDF avec extraction et superposition de métadonnées.
 ## 📋 Fonctionnalités
 
 - ✅ Interface simple et intuitive (Drag & Drop)
-- ✅ Extraction automatique des métadonnées EXIF
+- ✅ Extraction automatique des métadonnées EXIF (GPS, Date/Heure)
 - ✅ Superposition des métadonnées sur les images (bas à droite)
+  - **Ligne 1**: Coordonnées GPS (si disponibles)
+  - **Ligne 2**: Date et heure de prise de vue
 - ✅ Génération de PDF multi-pages (1 image par page)
+- ✅ **Format Lettre US** (8.5" × 11")
+- ✅ **Orientation automatique** (portrait ou paysage selon l'image)
 - ✅ **Une seule dépendance** - jsPDF (JavaScript pur)
 - ✅ Fonctionne entièrement dans le navigateur
 - ✅ Compatible avec tous les navigateurs modernes
 
 ## 🚀 Installation et Utilisation
 
-### Télécharger jsPDF
+### Télécharger les bibliothèques JavaScript
 
-Avant d'utiliser l'application, vous devez télécharger la bibliothèque jsPDF :
+Avant d'utiliser l'application, vous devez télécharger les bibliothèques requises :
 
 ```bash
-# Avec curl (PowerShell/Windows)
+# jsPDF - Génération PDF
 curl -o jspdf.min.js https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
 
-# Ou avec wget (Linux/Mac)
-wget -O jspdf.min.js https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+# exif-js - Extraction métadonnées EXIF
+curl -o exif-js.min.js https://cdn.jsdelivr.net/npm/exif-js/exif.min.js
 ```
 
 ### Utilisation
@@ -80,12 +84,15 @@ L'application parse les segments EXIF du fichier JPEG pour extraire:
 - Les métadonnées sont dessinées sur un Canvas
 - Positionnées en bas à droite de chaque image
 - Fond noir semi-transparent pour la lisibilité
-- Texte blanc avec police Arial
+- Texte blanc en gras, taille 24px
+- **Ligne 1**: Coordonnées GPS (latitude, longitude)
+- **Ligne 2**: Date et heure de prise de vue
 
 ### Génération PDF
 
 Le PDF est généré avec jsPDF :
-- Format A4 (210 × 297 mm)
+- **Format Lettre US** (8.5" × 11" / 215.9 × 279.4 mm)
+- **Orientation dynamique**: Portrait pour images verticales, Paysage pour images horizontales
 - Images centrées et redimensionnées automatiquement
 - Une image par page
 - Compatible avec tous les lecteurs PDF
@@ -101,6 +108,9 @@ Le PDF est généré avec jsPDF :
 
 - **jsPDF v2.5.1** - Génération de fichiers PDF
   - Source: https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js
+  - Licence: MIT
+- **exif-js** - Extraction de métadonnées EXIF
+  - Source: https://cdn.jsdelivr.net/npm/exif-js/exif.min.js
   - Licence: MIT
 
 ## 🌐 Compatibilité navigateur

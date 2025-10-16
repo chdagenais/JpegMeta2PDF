@@ -1,7 +1,24 @@
 /**
  * JPEG Meta2PDF - Application de conversion JPEG vers PDF avec métadonnées
- * Utilise uniquement les APIs natives du navigateur
+ * Utilise exif-js pour l'extraction EXIF et jsPDF pour la génération PDF
  */
+
+// Fonction helper pour convertir DMS (Degrees, Minutes, Seconds) en DD (Decimal Degrees)
+function convertDMSToDD(dms, ref) {
+    if (!dms || dms.length !== 3) return 0;
+    
+    const degrees = dms[0];
+    const minutes = dms[1];
+    const seconds = dms[2];
+    
+    let dd = degrees + minutes / 60 + seconds / 3600;
+    
+    if (ref === 'S' || ref === 'W') {
+        dd = dd * -1;
+    }
+    
+    return dd;
+}
 
 class JpegMeta2PDF {
     constructor() {
@@ -154,17 +171,46 @@ class JpegMeta2PDF {
     async processImage(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
+            
             reader.onload = async (e) => {
                 try {
-                    const arrayBuffer = e.target.result;
-                    const exifData = this.extractExifData(arrayBuffer);
-                    
-                    // Créer une image pour obtenir les dimensions
+                    // Créer une image à partir du résultat du FileReader
                     const img = new Image();
-                    const imgUrl = URL.createObjectURL(file);
                     
                     img.onload = async () => {
-                        URL.revokeObjectURL(imgUrl);
+                        // Utiliser exif-js pour extraire les métadonnées
+                        let exifData = {};
+                        
+                        try {
+                            await new Promise((resolveExif) => {
+                                EXIF.getData(img, function() {
+                                    // Extraire les coordonnées GPS
+                                    const lat = EXIF.getTag(this, 'GPSLatitude');
+                                    const latRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                                    const lon = EXIF.getTag(this, 'GPSLongitude');
+                                    const lonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+                                    
+                                    if (lat && lon) {
+                                        const latDecimal = convertDMSToDD(lat, latRef);
+                                        const lonDecimal = convertDMSToDD(lon, lonRef);
+                                        exifData.GPS = `${latDecimal.toFixed(6)}°, ${lonDecimal.toFixed(6)}°`;
+                                    }
+                                    
+                                    // Extraire la date
+                                    const dateTime = EXIF.getTag(this, 'DateTime') || 
+                                                   EXIF.getTag(this, 'DateTimeOriginal') || 
+                                                   EXIF.getTag(this, 'DateTimeDigitized');
+                                    
+                                    if (dateTime) {
+                                        exifData.Date = dateTime;
+                                    }
+                                    
+                                    resolveExif();
+                                });
+                            });
+                        } catch (exifError) {
+                            console.warn('Erreur extraction EXIF:', exifError);
+                        }
                         
                         // Créer un canvas pour ajouter les métadonnées
                         const canvas = document.createElement('canvas');
@@ -177,42 +223,53 @@ class JpegMeta2PDF {
                         
                         // Ajouter les métadonnées en bas à droite
                         if (Object.keys(exifData).length > 0) {
-                            const padding = 10;
-                            const lineHeight = 20;
-                            const fontSize = 14;
+                            const padding = 15;
+                            const lineHeight = 35;
+                            const fontSize = 24;
                             
                             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                            ctx.font = `${fontSize}px Arial`;
+                            ctx.font = `bold ${fontSize}px Arial`;
                             
+                            // Organiser les métadonnées : GPS ligne 1, Date ligne 2
                             const metaLines = [];
-                            for (const [key, value] of Object.entries(exifData)) {
-                                metaLines.push(`${key}: ${value}`);
+                            
+                            // Ligne 1: Coordonnées GPS si disponibles
+                            if (exifData.GPS) {
+                                metaLines.push(exifData.GPS);
                             }
                             
-                            // Calculer la taille du rectangle de fond
-                            const maxWidth = Math.max(...metaLines.map(line => ctx.measureText(line).width));
-                            const rectHeight = metaLines.length * lineHeight + padding * 2;
-                            const rectWidth = maxWidth + padding * 2;
+                            // Ligne 2: Date et heure
+                            if (exifData.Date) {
+                                metaLines.push(exifData.Date);
+                            }
                             
-                            // Dessiner le fond semi-transparent
-                            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-                            ctx.fillRect(
-                                canvas.width - rectWidth - 10,
-                                canvas.height - rectHeight - 10,
-                                rectWidth,
-                                rectHeight
-                            );
-                            
-                            // Dessiner le texte
-                            ctx.fillStyle = 'white';
-                            ctx.font = `${fontSize}px Arial`;
-                            metaLines.forEach((line, index) => {
-                                ctx.fillText(
-                                    line,
-                                    canvas.width - rectWidth - 10 + padding,
-                                    canvas.height - rectHeight - 10 + padding + (index + 1) * lineHeight
+                            // Si on a des métadonnées à afficher
+                            if (metaLines.length > 0) {
+                                // Calculer la taille du rectangle de fond
+                                const maxWidth = Math.max(...metaLines.map(line => ctx.measureText(line).width));
+                                const rectHeight = metaLines.length * lineHeight + padding * 2;
+                                const rectWidth = maxWidth + padding * 2;
+                                
+                                // Dessiner le fond semi-transparent
+                                ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+                                ctx.fillRect(
+                                    canvas.width - rectWidth - 15,
+                                    canvas.height - rectHeight - 15,
+                                    rectWidth,
+                                    rectHeight
                                 );
-                            });
+                                
+                                // Dessiner le texte
+                                ctx.fillStyle = 'white';
+                                ctx.font = `bold ${fontSize}px Arial`;
+                                metaLines.forEach((line, index) => {
+                                    ctx.fillText(
+                                        line,
+                                        canvas.width - rectWidth - 15 + padding,
+                                        canvas.height - rectHeight - 15 + padding + (index + 1) * lineHeight
+                                    );
+                                });
+                            }
                         }
                         
                         // Convertir le canvas en blob JPEG
@@ -229,190 +286,55 @@ class JpegMeta2PDF {
                     };
                     
                     img.onerror = () => {
-                        URL.revokeObjectURL(imgUrl);
                         reject(new Error(`Impossible de charger l'image: ${file.name}`));
                     };
                     
-                    img.src = imgUrl;
+                    // Charger l'image à partir des données du FileReader
+                    img.src = e.target.result;
                 } catch (error) {
                     reject(error);
                 }
             };
+            
             reader.onerror = () => reject(new Error(`Erreur de lecture du fichier: ${file.name}`));
-            reader.readAsArrayBuffer(file);
+            
+            // Lire le fichier comme Data URL pour éviter les problèmes de blob
+            reader.readAsDataURL(file);
         });
-    }
-
-    extractExifData(arrayBuffer) {
-        const view = new DataView(arrayBuffer);
-        const exifData = {};
-
-        // Parcourir le fichier JPEG pour trouver le segment EXIF
-        let offset = 2; // Sauter le SOI (Start Of Image) marker 0xFFD8
-
-        while (offset < view.byteLength) {
-            const marker = view.getUint16(offset, false);
-            offset += 2;
-
-            // Vérifier si c'est un marqueur de segment valide
-            if ((marker & 0xFF00) !== 0xFF00) {
-                break;
-            }
-
-            // Si c'est le segment APP1 (EXIF)
-            if (marker === 0xFFE1) {
-                const length = view.getUint16(offset, false);
-                offset += 2;
-
-                // Vérifier la signature EXIF
-                if (offset + 6 <= view.byteLength) {
-                    const exifSignature = String.fromCharCode(
-                        view.getUint8(offset),
-                        view.getUint8(offset + 1),
-                        view.getUint8(offset + 2),
-                        view.getUint8(offset + 3),
-                        view.getUint8(offset + 4),
-                        view.getUint8(offset + 5)
-                    );
-
-                    if (exifSignature === 'Exif\0\0') {
-                        const tiffOffset = offset + 6;
-                        const exifDataExtracted = this.parseTIFF(view, tiffOffset);
-                        Object.assign(exifData, exifDataExtracted);
-                    }
-                }
-                offset += length - 2;
-            } else if (marker === 0xFFDA) {
-                // SOS (Start of Scan) - fin des métadonnées
-                break;
-            } else {
-                // Autres segments
-                const length = view.getUint16(offset, false);
-                offset += length;
-            }
-        }
-
-        return exifData;
-    }
-
-    parseTIFF(view, offset) {
-        const exifData = {};
-        
-        try {
-            // Déterminer l'ordre des octets (big-endian ou little-endian)
-            const littleEndian = view.getUint16(offset, false) === 0x4949;
-            offset += 2;
-
-            // Vérifier la valeur magique TIFF (42)
-            const magic = view.getUint16(offset, littleEndian);
-            if (magic !== 42) {
-                return exifData;
-            }
-            offset += 2;
-
-            // Lire le décalage du premier IFD (Image File Directory)
-            const ifdOffset = view.getUint32(offset, littleEndian);
-            let ifdPos = offset - 4 + ifdOffset;
-
-            // Lire les IFD
-            exifData.entries = this.readIFD(view, ifdPos, littleEndian);
-
-            // Extraire les métadonnées utiles
-            const formattedData = {};
-            for (const [tag, value] of Object.entries(exifData.entries)) {
-                switch(tag) {
-                    case '0x010f': // Fabricant
-                        formattedData.Fabricant = value;
-                        break;
-                    case '0x0110': // Modèle
-                        formattedData.Modèle = value;
-                        break;
-                    case '0x0132': // Date/Heure
-                        formattedData.Date = value;
-                        break;
-                    case '0x0131': // Logiciel
-                        formattedData.Logiciel = value;
-                        break;
-                    case '0x8825': // Géolocalisation
-                        formattedData.GPS = value;
-                        break;
-                }
-            }
-
-            return formattedData;
-        } catch (error) {
-            console.warn('Erreur lors du parsing TIFF:', error);
-            return exifData;
-        }
-    }
-
-    readIFD(view, offset, littleEndian) {
-        const entries = {};
-        
-        try {
-            const numEntries = view.getUint16(offset, littleEndian);
-            offset += 2;
-
-            for (let i = 0; i < numEntries && offset < view.byteLength - 12; i++) {
-                const tag = '0x' + view.getUint16(offset, littleEndian).toString(16).padStart(4, '0');
-                offset += 2;
-
-                const type = view.getUint16(offset, littleEndian);
-                offset += 2;
-
-                const count = view.getUint32(offset, littleEndian);
-                offset += 4;
-
-                const value = this.readIFDValue(view, offset, type, count, littleEndian);
-                entries[tag] = value;
-
-                offset += 4; // Passer au prochain IFD entry
-            }
-        } catch (error) {
-            console.warn('Erreur lors de la lecture IFD:', error);
-        }
-
-        return entries;
-    }
-
-    readIFDValue(view, offset, type, count, littleEndian) {
-        try {
-            switch(type) {
-                case 2: // ASCII
-                    return String.fromCharCode.apply(null, new Uint8Array(view.buffer, offset, Math.min(count, 4)));
-                case 3: // SHORT
-                    return view.getUint16(offset, littleEndian);
-                case 4: // LONG
-                    return view.getUint32(offset, littleEndian);
-                case 5: // RATIONAL
-                    return view.getUint32(offset, littleEndian) / view.getUint32(offset + 4, littleEndian);
-                default:
-                    return 'N/A';
-            }
-        } catch (error) {
-            return 'N/A';
-        }
     }
 
     async createPDF(images) {
         // Utiliser jsPDF pour créer le PDF
         const { jsPDF } = window.jspdf;
-        const pdf = new jsPDF({
-            orientation: 'portrait',
-            unit: 'mm',
-            format: 'a4'
-        });
         
-        const pageWidth = 210; // A4 width in mm
-        const pageHeight = 297; // A4 height in mm
+        // Format Lettre US (8.5 x 11 pouces = 215.9 x 279.4 mm)
+        const letterWidth = 215.9;
+        const letterHeight = 279.4;
         const margin = 10;
         
+        let pdf = null;
+        
         for (let i = 0; i < images.length; i++) {
-            if (i > 0) {
-                pdf.addPage();
-            }
-            
             const imageData = images[i];
+            
+            // Déterminer l'orientation selon le ratio de l'image
+            const imageRatio = imageData.width / imageData.height;
+            const orientation = imageRatio > 1 ? 'landscape' : 'portrait';
+            
+            // Dimensions de la page selon l'orientation
+            const pageWidth = orientation === 'landscape' ? letterHeight : letterWidth;
+            const pageHeight = orientation === 'landscape' ? letterWidth : letterHeight;
+            
+            // Créer le PDF ou ajouter une page
+            if (i === 0) {
+                pdf = new jsPDF({
+                    orientation: orientation,
+                    unit: 'mm',
+                    format: 'letter'
+                });
+            } else {
+                pdf.addPage('letter', orientation);
+            }
             
             // Convertir le canvas en image base64
             const imgDataUrl = imageData.canvas.toDataURL('image/jpeg', 0.95);
