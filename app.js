@@ -30,6 +30,7 @@ class JpegMeta2PDF {
         const uploadSection = document.getElementById('uploadSection');
         const fileInput = document.getElementById('fileInput');
         const generateBtn = document.getElementById('generateBtn');
+        const generateKmzBtn = document.getElementById('generateKmzBtn');
         const clearBtn = document.getElementById('clearBtn');
 
         // Gestion du clic sur la zone de dépôt
@@ -58,6 +59,7 @@ class JpegMeta2PDF {
 
         // Boutons d'action
         generateBtn.addEventListener('click', () => this.generatePDF());
+        generateKmzBtn.addEventListener('click', () => this.generateKMZ());
         clearBtn.addEventListener('click', () => this.clearFiles());
     }
 
@@ -79,6 +81,7 @@ class JpegMeta2PDF {
         const filesContainer = document.getElementById('filesContainer');
         const filesList = document.getElementById('filesList');
         const generateBtn = document.getElementById('generateBtn');
+        const generateKmzBtn = document.getElementById('generateKmzBtn');
 
         filesContainer.innerHTML = '';
 
@@ -99,6 +102,7 @@ class JpegMeta2PDF {
 
         filesList.style.display = this.files.length > 0 ? 'block' : 'none';
         generateBtn.disabled = this.files.length === 0;
+        generateKmzBtn.disabled = this.files.length === 0;
     }
 
     removeFile(index) {
@@ -368,6 +372,209 @@ class JpegMeta2PDF {
         
         // Sauvegarder le PDF
         pdf.save(`images_metadata_${new Date().getTime()}.pdf`);
+    }
+
+    async generateKMZ() {
+        if (this.files.length === 0) return;
+
+        const generateBtn = document.getElementById('generateBtn');
+        const generateKmzBtn = document.getElementById('generateKmzBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        generateBtn.disabled = true;
+        generateKmzBtn.disabled = true;
+        clearBtn.disabled = true;
+
+        try {
+            this.showMessage('Extraction des métadonnées pour KMZ...', 'info');
+
+            // Extraire les métadonnées de toutes les images
+            const imagesWithGPS = [];
+            
+            for (let i = 0; i < this.files.length; i++) {
+                this.updateProgress(i + 1, this.files.length, `Extraction EXIF: ${this.files[i].name}`);
+                
+                try {
+                    const exifData = await this.extractEXIFData(this.files[i]);
+                    
+                    // Ne garder que les images avec GPS
+                    if (exifData.gps && exifData.gps.lat !== 0 && exifData.gps.lon !== 0) {
+                        imagesWithGPS.push({
+                            file: this.files[i],
+                            exifData: exifData
+                        });
+                    }
+                } catch (error) {
+                    console.warn(`Impossible d'extraire les données EXIF de ${this.files[i].name}:`, error);
+                }
+            }
+
+            if (imagesWithGPS.length === 0) {
+                throw new Error('Aucune image avec coordonnées GPS trouvée');
+            }
+
+            this.updateProgress(1, 1, 'Génération du fichier KML...');
+
+            // Créer le contenu KML
+            const kmlContent = this.createKMLContent(imagesWithGPS);
+
+            // Créer un ZIP contenant le KML et les images
+            await this.createKMZFile(kmlContent, imagesWithGPS);
+
+            this.showMessage(`✅ Fichier KMZ généré avec succès (${imagesWithGPS.length} images avec GPS)`, 'success');
+
+        } catch (error) {
+            this.showMessage(`❌ Erreur: ${error.message}`, 'error');
+            console.error('Erreur lors de la génération KMZ:', error);
+        } finally {
+            generateBtn.disabled = false;
+            generateKmzBtn.disabled = false;
+            clearBtn.disabled = false;
+            document.getElementById('progressContainer').style.display = 'none';
+        }
+    }
+
+    async extractEXIFData(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+                
+                img.onload = function() {
+                    EXIF.getData(img, function() {
+                        const exifData = {
+                            make: EXIF.getTag(this, 'Make') || '',
+                            model: EXIF.getTag(this, 'Model') || '',
+                            datetime: EXIF.getTag(this, 'DateTime') || 
+                                     EXIF.getTag(this, 'DateTimeOriginal') || 
+                                     EXIF.getTag(this, 'DateTimeDigitized') || '',
+                            software: EXIF.getTag(this, 'Software') || '',
+                            gps: null
+                        };
+
+                        // Extraction GPS
+                        const gpsLat = EXIF.getTag(this, 'GPSLatitude');
+                        const gpsLatRef = EXIF.getTag(this, 'GPSLatitudeRef');
+                        const gpsLon = EXIF.getTag(this, 'GPSLongitude');
+                        const gpsLonRef = EXIF.getTag(this, 'GPSLongitudeRef');
+
+                        if (gpsLat && gpsLon) {
+                            const lat = convertDMSToDD(gpsLat, gpsLatRef);
+                            const lon = convertDMSToDD(gpsLon, gpsLonRef);
+                            
+                            exifData.gps = {
+                                lat: lat,
+                                lon: lon,
+                                latRef: gpsLatRef || 'N',
+                                lonRef: gpsLonRef || 'E'
+                            };
+                        }
+
+                        resolve(exifData);
+                    });
+                };
+                
+                img.onerror = () => reject(new Error('Impossible de charger l\'image'));
+            };
+            
+            reader.onerror = () => reject(new Error('Erreur de lecture du fichier'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    createKMLContent(imagesWithGPS) {
+        const timestamp = new Date().toISOString();
+        
+        let placemarks = '';
+        
+        imagesWithGPS.forEach((item, index) => {
+            const { file, exifData } = item;
+            const { gps, datetime, make, model } = exifData;
+            
+            const description = [
+                `<![CDATA[`,
+                `<img src="files/${file.name}" width="400"/>`,
+                `<br/><b>Fichier:</b> ${file.name}`,
+                datetime ? `<br/><b>Date:</b> ${datetime}` : '',
+                make ? `<br/><b>Appareil:</b> ${make} ${model || ''}` : '',
+                `<br/><b>Coordonnées:</b> ${gps.lat.toFixed(6)}, ${gps.lon.toFixed(6)}`,
+                `]]>`
+            ].filter(line => line).join('\n');
+            
+            placemarks += `
+    <Placemark>
+      <name>${file.name}</name>
+      <description>${description}</description>
+      <Point>
+        <coordinates>${gps.lon},${gps.lat},0</coordinates>
+      </Point>
+      <Style>
+        <IconStyle>
+          <Icon>
+            <href>http://maps.google.com/mapfiles/kml/paddle/blu-blank.png</href>
+          </Icon>
+        </IconStyle>
+      </Style>
+    </Placemark>`;
+        });
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Photos avec métadonnées GPS</name>
+    <description>Généré par JPEG Meta2PDF le ${timestamp}</description>
+${placemarks}
+  </Document>
+</kml>`;
+    }
+
+    async createKMZFile(kmlContent, imagesWithGPS) {
+        // Créer un fichier KMZ (ZIP contenant doc.kml + images dans dossier files/)
+        const zip = new JSZip();
+        
+        // Ajouter le fichier KML à la racine
+        zip.file('doc.kml', kmlContent);
+        
+        // Créer le dossier files/ et ajouter les images
+        const filesFolder = zip.folder('files');
+        
+        // Ajouter chaque image au ZIP
+        for (let i = 0; i < imagesWithGPS.length; i++) {
+            const item = imagesWithGPS[i];
+            this.updateProgress(i + 1, imagesWithGPS.length, `Ajout de ${item.file.name} au KMZ...`);
+            
+            // Lire le fichier image comme ArrayBuffer
+            const arrayBuffer = await this.readFileAsArrayBuffer(item.file);
+            filesFolder.file(item.file.name, arrayBuffer);
+        }
+        
+        // Générer le fichier ZIP/KMZ
+        this.updateProgress(1, 1, 'Compression du fichier KMZ...');
+        const kmzBlob = await zip.generateAsync({
+            type: 'blob',
+            compression: 'DEFLATE',
+            compressionOptions: { level: 6 }
+        });
+        
+        // Télécharger le fichier KMZ
+        const url = URL.createObjectURL(kmzBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `images_gps_${new Date().getTime()}.kmz`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => reject(new Error(`Erreur de lecture de ${file.name}`));
+            reader.readAsArrayBuffer(file);
+        });
     }
 }
 

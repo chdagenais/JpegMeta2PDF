@@ -166,6 +166,7 @@
             display: flex;
             gap: 12px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
         .btn {
@@ -177,6 +178,7 @@
             font-weight: 600;
             cursor: pointer;
             transition: all 0.3s ease;
+            min-width: 140px;
         }
 
         .btn-primary {
@@ -290,7 +292,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>📸 JPEG Meta2PDF</h1>
+        <h1>JPEG Meta2PDF (ou KMZ)</h1>
         <p class="subtitle">Convertisseur JPEG vers PDF avec extraction de métadonnées</p>
 
         <div id="message" class="message"></div>
@@ -320,11 +322,13 @@
         <div class="controls">
             <button class="btn btn-secondary" id="clearBtn">Effacer</button>
             <button class="btn btn-primary" id="generateBtn" disabled>Générer PDF</button>
+            <button class="btn btn-primary" id="generateKmzBtn" disabled>Générer KMZ</button>
         </div>
     </div>
 
     <script src="exif-js.min.js"></script>
     <script src="jspdf.min.js"></script>
+    <script src="jszip.min.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
