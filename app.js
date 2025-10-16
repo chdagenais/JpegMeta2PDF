@@ -395,154 +395,49 @@ class JpegMeta2PDF {
     }
 
     async createPDF(images) {
-        // Créer un PDF simple en utilisant Canvas et la conversion en DataURL
-        const pdfDoc = new SimplePDFGenerator();
+        // Utiliser jsPDF pour créer le PDF
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+            orientation: 'portrait',
+            unit: 'mm',
+            format: 'a4'
+        });
+        
+        const pageWidth = 210; // A4 width in mm
+        const pageHeight = 297; // A4 height in mm
+        const margin = 10;
         
         for (let i = 0; i < images.length; i++) {
+            if (i > 0) {
+                pdf.addPage();
+            }
+            
             const imageData = images[i];
-            await pdfDoc.addPage(imageData.canvas, imageData.width, imageData.height);
-        }
-        
-        const pdfBlob = pdfDoc.generate();
-        this.downloadPDF(pdfBlob);
-    }
-
-    downloadPDF(pdfBlob) {
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `images_metadata_${new Date().getTime()}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-    }
-}
-
-/**
- * Générateur PDF simple utilisant uniquement les APIs natives
- */
-class SimplePDFGenerator {
-    constructor() {
-        this.pages = [];
-        this.objectId = 1;
-    }
-    
-    async addPage(canvas, width, height) {
-        // Convertir le canvas en image base64
-        const imageDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        const imageData = imageDataUrl.split(',')[1]; // Retirer le préfixe data:image/jpeg;base64,
-        
-        this.pages.push({
-            imageData: imageData,
-            width: width,
-            height: height
-        });
-    }
-    
-    generate() {
-        const pageWidth = 595.28; // A4 width in points (210mm)
-        const pageHeight = 841.89; // A4 height in points (297mm)
-        
-        // Construction du PDF
-        const pdfLines = [];
-        pdfLines.push('%PDF-1.4');
-        
-        let nextObjId = 1;
-        const offsets = [0]; // Offset 0 pour l'objet 0 (non utilisé)
-        
-        // Objet 1: Catalog
-        const catalogId = nextObjId++;
-        offsets.push(this.calculateOffset(pdfLines));
-        pdfLines.push(`${catalogId} 0 obj`);
-        pdfLines.push('<< /Type /Catalog /Pages 2 0 R >>');
-        pdfLines.push('endobj');
-        
-        // Réserver l'ID 2 pour Pages (sera écrit à la fin)
-        const pagesId = nextObjId++;
-        
-        const pageObjIds = [];
-        
-        // Créer les objets pour chaque page
-        for (let i = 0; i < this.pages.length; i++) {
-            const page = this.pages[i];
             
-            // Calculer les dimensions pour adapter l'image à la page A4
-            let imgWidth = pageWidth - 40;
-            let imgHeight = (page.height / page.width) * imgWidth;
+            // Convertir le canvas en image base64
+            const imgDataUrl = imageData.canvas.toDataURL('image/jpeg', 0.95);
             
-            if (imgHeight > pageHeight - 40) {
-                imgHeight = pageHeight - 40;
-                imgWidth = (page.width / page.height) * imgHeight;
+            // Calculer les dimensions pour adapter l'image à la page
+            const maxWidth = pageWidth - (margin * 2);
+            const maxHeight = pageHeight - (margin * 2);
+            
+            let imgWidth = maxWidth;
+            let imgHeight = (imageData.height / imageData.width) * imgWidth;
+            
+            if (imgHeight > maxHeight) {
+                imgHeight = maxHeight;
+                imgWidth = (imageData.width / imageData.height) * imgHeight;
             }
             
             const xOffset = (pageWidth - imgWidth) / 2;
             const yOffset = (pageHeight - imgHeight) / 2;
             
-            // Objet Image XObject
-            const imageObjId = nextObjId++;
-            const imageBytes = atob(page.imageData);
-            
-            offsets.push(this.calculateOffset(pdfLines));
-            pdfLines.push(`${imageObjId} 0 obj`);
-            pdfLines.push(`<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`);
-            pdfLines.push('stream');
-            pdfLines.push(imageBytes);
-            pdfLines.push('endstream');
-            pdfLines.push('endobj');
-            
-            // Objet Content Stream (commandes de dessin)
-            const contentObjId = nextObjId++;
-            const contentStream = `q\n${imgWidth} 0 0 ${imgHeight} ${xOffset} ${yOffset} cm\n/Im${i} Do\nQ`;
-            
-            offsets.push(this.calculateOffset(pdfLines));
-            pdfLines.push(`${contentObjId} 0 obj`);
-            pdfLines.push(`<< /Length ${contentStream.length} >>`);
-            pdfLines.push('stream');
-            pdfLines.push(contentStream);
-            pdfLines.push('endstream');
-            pdfLines.push('endobj');
-            
-            // Objet Page
-            const pageObjId = nextObjId++;
-            pageObjIds.push(pageObjId);
-            
-            offsets.push(this.calculateOffset(pdfLines));
-            pdfLines.push(`${pageObjId} 0 obj`);
-            pdfLines.push(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents ${contentObjId} 0 R /Resources << /XObject << /Im${i} ${imageObjId} 0 R >> >> >>`);
-            pdfLines.push('endobj');
+            // Ajouter l'image au PDF
+            pdf.addImage(imgDataUrl, 'JPEG', xOffset, yOffset, imgWidth, imgHeight);
         }
         
-        // Objet 2: Pages
-        offsets.push(this.calculateOffset(pdfLines));
-        pdfLines.push(`${pagesId} 0 obj`);
-        pdfLines.push(`<< /Type /Pages /Kids [${pageObjIds.map(id => `${id} 0 R`).join(' ')}] /Count ${this.pages.length} >>`);
-        pdfLines.push('endobj');
-        
-        // Table xref
-        const xrefOffset = this.calculateOffset(pdfLines);
-        pdfLines.push('xref');
-        pdfLines.push(`0 ${offsets.length}`);
-        pdfLines.push('0000000000 65535 f ');
-        
-        for (let i = 1; i < offsets.length; i++) {
-            pdfLines.push(offsets[i].toString().padStart(10, '0') + ' 00000 n ');
-        }
-        
-        // Trailer
-        pdfLines.push('trailer');
-        pdfLines.push(`<< /Size ${offsets.length} /Root ${catalogId} 0 R >>`);
-        pdfLines.push('startxref');
-        pdfLines.push(xrefOffset.toString());
-        pdfLines.push('%%EOF');
-        
-        const pdfContent = pdfLines.join('\n');
-        return new Blob([pdfContent], { type: 'application/pdf' });
-    }
-    
-    calculateOffset(lines) {
-        // Calculer l'offset en comptant tous les caractères + newlines
-        return lines.reduce((sum, line) => sum + line.length + 1, 0);
+        // Sauvegarder le PDF
+        pdf.save(`images_metadata_${new Date().getTime()}.pdf`);
     }
 }
 

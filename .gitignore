@@ -30,6 +30,7 @@ npm-debug.log*
 
 # Fichiers d'images de test (optionnel)
 test_images/
+test/*
 *.jpg
 *.jpeg
 *.JPG
