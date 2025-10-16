@@ -444,30 +444,31 @@ class SimplePDFGenerator {
         const pageWidth = 595.28; // A4 width in points (210mm)
         const pageHeight = 841.89; // A4 height in points (297mm)
         
-        let pdf = '%PDF-1.4\n';
-        const objects = [];
-        let currentOffset = pdf.length;
-        const offsets = [0]; // Premier offset bidon pour l'objet 0
+        // Construction du PDF
+        const pdfLines = [];
+        pdfLines.push('%PDF-1.4');
         
-        // Objet 1: Catalogue
-        offsets.push(currentOffset);
-        const catalogObj = `1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n`;
-        pdf += catalogObj;
-        currentOffset += catalogObj.length;
+        let nextObjId = 1;
+        const offsets = [0]; // Offset 0 pour l'objet 0 (non utilisé)
         
-        // Objet 2: Pages (sera écrit après avoir créé toutes les pages)
-        const pagesObjId = 2;
-        let nextObjId = 3;
+        // Objet 1: Catalog
+        const catalogId = nextObjId++;
+        offsets.push(this.calculateOffset(pdfLines));
+        pdfLines.push(`${catalogId} 0 obj`);
+        pdfLines.push('<< /Type /Catalog /Pages 2 0 R >>');
+        pdfLines.push('endobj');
+        
+        // Réserver l'ID 2 pour Pages (sera écrit à la fin)
+        const pagesId = nextObjId++;
         
         const pageObjIds = [];
-        const imageObjIds = [];
         
         // Créer les objets pour chaque page
         for (let i = 0; i < this.pages.length; i++) {
             const page = this.pages[i];
             
             // Calculer les dimensions pour adapter l'image à la page A4
-            let imgWidth = pageWidth - 40; // Marges
+            let imgWidth = pageWidth - 40;
             let imgHeight = (page.height / page.width) * imgWidth;
             
             if (imgHeight > pageHeight - 40) {
@@ -478,60 +479,70 @@ class SimplePDFGenerator {
             const xOffset = (pageWidth - imgWidth) / 2;
             const yOffset = (pageHeight - imgHeight) / 2;
             
-            // Objet image
+            // Objet Image XObject
             const imageObjId = nextObjId++;
-            imageObjIds.push(imageObjId);
-            
             const imageBytes = atob(page.imageData);
-            const imageLength = imageBytes.length;
             
-            offsets.push(currentOffset);
-            const imageObj = `${imageObjId} 0 obj\n<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageLength} >>\nstream\n${imageBytes}\nendstream\nendobj\n`;
-            pdf += imageObj;
-            currentOffset += imageObj.length;
+            offsets.push(this.calculateOffset(pdfLines));
+            pdfLines.push(`${imageObjId} 0 obj`);
+            pdfLines.push(`<< /Type /XObject /Subtype /Image /Width ${page.width} /Height ${page.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>`);
+            pdfLines.push('stream');
+            pdfLines.push(imageBytes);
+            pdfLines.push('endstream');
+            pdfLines.push('endobj');
             
-            // Objet contenu de la page (instructions de dessin)
+            // Objet Content Stream (commandes de dessin)
             const contentObjId = nextObjId++;
-            const contentStream = `q\n${imgWidth} 0 0 ${imgHeight} ${xOffset} ${yOffset} cm\n/Im${i} Do\nQ\n`;
+            const contentStream = `q\n${imgWidth} 0 0 ${imgHeight} ${xOffset} ${yOffset} cm\n/Im${i} Do\nQ`;
             
-            offsets.push(currentOffset);
-            const contentObj = `${contentObjId} 0 obj\n<< /Length ${contentStream.length} >>\nstream\n${contentStream}\nendstream\nendobj\n`;
-            pdf += contentObj;
-            currentOffset += contentObj.length;
+            offsets.push(this.calculateOffset(pdfLines));
+            pdfLines.push(`${contentObjId} 0 obj`);
+            pdfLines.push(`<< /Length ${contentStream.length} >>`);
+            pdfLines.push('stream');
+            pdfLines.push(contentStream);
+            pdfLines.push('endstream');
+            pdfLines.push('endobj');
             
-            // Objet page
+            // Objet Page
             const pageObjId = nextObjId++;
             pageObjIds.push(pageObjId);
             
-            offsets.push(currentOffset);
-            const pageObj = `${pageObjId} 0 obj\n<< /Type /Page /Parent ${pagesObjId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents ${contentObjId} 0 R /Resources << /XObject << /Im${i} ${imageObjId} 0 R >> >> >>\nendobj\n`;
-            pdf += pageObj;
-            currentOffset += pageObj.length;
+            offsets.push(this.calculateOffset(pdfLines));
+            pdfLines.push(`${pageObjId} 0 obj`);
+            pdfLines.push(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Contents ${contentObjId} 0 R /Resources << /XObject << /Im${i} ${imageObjId} 0 R >> >> >>`);
+            pdfLines.push('endobj');
         }
         
-        // Maintenant créer l'objet Pages
-        offsets.push(currentOffset);
-        const pagesObj = `${pagesObjId} 0 obj\n<< /Type /Pages /Kids [${pageObjIds.map(id => `${id} 0 R`).join(' ')}] /Count ${this.pages.length} >>\nendobj\n`;
-        pdf += pagesObj;
-        currentOffset += pagesObj.length;
+        // Objet 2: Pages
+        offsets.push(this.calculateOffset(pdfLines));
+        pdfLines.push(`${pagesId} 0 obj`);
+        pdfLines.push(`<< /Type /Pages /Kids [${pageObjIds.map(id => `${id} 0 R`).join(' ')}] /Count ${this.pages.length} >>`);
+        pdfLines.push('endobj');
         
-        // Table de références croisées
-        const xrefOffset = currentOffset;
-        pdf += 'xref\n';
-        pdf += `0 ${offsets.length}\n`;
-        pdf += '0000000000 65535 f \n';
+        // Table xref
+        const xrefOffset = this.calculateOffset(pdfLines);
+        pdfLines.push('xref');
+        pdfLines.push(`0 ${offsets.length}`);
+        pdfLines.push('0000000000 65535 f ');
+        
         for (let i = 1; i < offsets.length; i++) {
-            pdf += offsets[i].toString().padStart(10, '0') + ' 00000 n \n';
+            pdfLines.push(offsets[i].toString().padStart(10, '0') + ' 00000 n ');
         }
         
         // Trailer
-        pdf += 'trailer\n';
-        pdf += `<< /Size ${offsets.length} /Root 1 0 R >>\n`;
-        pdf += 'startxref\n';
-        pdf += xrefOffset + '\n';
-        pdf += '%%EOF';
+        pdfLines.push('trailer');
+        pdfLines.push(`<< /Size ${offsets.length} /Root ${catalogId} 0 R >>`);
+        pdfLines.push('startxref');
+        pdfLines.push(xrefOffset.toString());
+        pdfLines.push('%%EOF');
         
-        return new Blob([pdf], { type: 'application/pdf' });
+        const pdfContent = pdfLines.join('\n');
+        return new Blob([pdfContent], { type: 'application/pdf' });
+    }
+    
+    calculateOffset(lines) {
+        // Calculer l'offset en comptant tous les caractères + newlines
+        return lines.reduce((sum, line) => sum + line.length + 1, 0);
     }
 }
 
