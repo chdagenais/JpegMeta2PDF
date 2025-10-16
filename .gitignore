@@ -1,0 +1,36 @@
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Éditeurs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Node (si jamais utilisé pour des outils de build)
+node_modules/
+package-lock.json
+yarn.lock
+
+# Distribution
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Fichiers temporaires
+*.tmp
+*.temp
+.env.local
+
+# Fichiers d'images de test (optionnel)
+test_images/
+*.jpg
+*.jpeg
+*.JPG
+*.JPEG
