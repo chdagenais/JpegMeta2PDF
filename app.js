@@ -406,6 +406,17 @@ class JpegMeta2PDF {
         const pdfBlob = pdfDoc.generate();
         this.downloadPDF(pdfBlob);
     }
+
+    downloadPDF(pdfBlob) {
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `images_metadata_${new Date().getTime()}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    }
 }
 
 /**
@@ -521,16 +532,6 @@ class SimplePDFGenerator {
         pdf += '%%EOF';
         
         return new Blob([pdf], { type: 'application/pdf' });
-    }
-    downloadPDF(pdfBlob) {
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `images_metadata_${new Date().getTime()}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
     }
 }
 
