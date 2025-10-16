@@ -23,10 +23,7 @@ build/
 *.log
 npm-debug.log*
 
-# Bibliothèques JavaScript (à télécharger via CDN)
-jspdf.min.js
-exif-js.min.js
-jszip.min.js
+
 
 # Fichiers temporaires
 *.tmp
