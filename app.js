@@ -20,6 +20,25 @@ function convertDMSToDD(dms, ref) {
     return dd;
 }
 
+// Fonction helper pour convertir la date EXIF vers le format ISO (YYYY-MM-DD HH:MM)
+function formatDateToISO(exifDate) {
+    if (!exifDate) return '';
+    
+    // Format EXIF: "YYYY:MM:DD HH:MM:SS" ou "YYYY:MM:DD HH:MM"
+    // Format ISO désiré: "YYYY-MM-DD HH:MM"
+    
+    // Remplacer les ":" par "-" dans la partie date, et garder seulement HH:MM
+    const parts = exifDate.split(' ');
+    if (parts.length >= 2) {
+        const datePart = parts[0].replace(/:/g, '-'); // YYYY-MM-DD
+        const timeParts = parts[1].split(':');
+        const timePart = `${timeParts[0]}:${timeParts[1]}`; // HH:MM (sans les secondes)
+        return `${datePart} ${timePart}`;
+    }
+    
+    return exifDate; // Retourner tel quel si format non reconnu
+}
+
 class JpegMeta2PDF {
     constructor() {
         this.files = [];
@@ -206,7 +225,7 @@ class JpegMeta2PDF {
                                                    EXIF.getTag(this, 'DateTimeDigitized');
                                     
                                     if (dateTime) {
-                                        exifData.Date = dateTime;
+                                        exifData.Date = formatDateToISO(dateTime);
                                     }
                                     
                                     resolveExif();
@@ -443,12 +462,14 @@ class JpegMeta2PDF {
                 
                 img.onload = function() {
                     EXIF.getData(img, function() {
+                        const dateTimeRaw = EXIF.getTag(this, 'DateTime') || 
+                                           EXIF.getTag(this, 'DateTimeOriginal') || 
+                                           EXIF.getTag(this, 'DateTimeDigitized') || '';
+                        
                         const exifData = {
                             make: EXIF.getTag(this, 'Make') || '',
                             model: EXIF.getTag(this, 'Model') || '',
-                            datetime: EXIF.getTag(this, 'DateTime') || 
-                                     EXIF.getTag(this, 'DateTimeOriginal') || 
-                                     EXIF.getTag(this, 'DateTimeDigitized') || '',
+                            datetime: formatDateToISO(dateTimeRaw),
                             software: EXIF.getTag(this, 'Software') || '',
                             gps: null
                         };
