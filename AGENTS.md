@@ -1,0 +1,1 @@
+dans ce projet, lorsque des librairies tierces sont utilisées, elles doivent être inclu dans les commits.. Les fichiers de bibliothèque doivent être ajoutés au dépôt et référencés dans le code.
