@@ -42,17 +42,6 @@ curl -o jszip.min.js https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.m
 4. **Générer KMZ** - Cliquez sur "Générer KMZ" pour créer un fichier Google Earth avec les photos géolocalisées
 5. **Télécharger** - Les fichiers sont automatiquement téléchargés
 
-## 🧪 Tester l'application
-
-### Générateur d'images de test
-
-Un outil de génération d'images de test est inclus :
-
-1. Ouvrez `test/generate_images.html` dans votre navigateur
-2. Trois images colorées sont générées automatiquement
-3. Téléchargez-les individuellement avec les boutons "Télécharger"
-4. Utilisez ces images pour tester l'application principale
-
 ## 🛠️ Architecture
 
 ```
@@ -63,9 +52,7 @@ JpegMeta2PDF/
 ├── exif-js.min.js           # Bibliothèque exif-js (à télécharger)
 ├── jszip.min.js             # Bibliothèque JSZip (à télécharger)
 ├── .gitignore               # Configuration Git
-├── README.md                # Cette documentation
-└── test/
-    └── generate_images.html  # Générateur d'images de test
+└── README.md                # Cette documentation
 ```
 
 ### Technologies utilisées
